@@ -33,7 +33,24 @@ class Solution:
         """
         # return homography
         """INSERT YOUR CODE HERE"""
-        pass
+        A_list = []  # np.array([]).reshape(1, -1)
+        for pixel_idx_src, pixel_idx_dst in zip(np.transpose(match_p_src), np.transpose(match_p_dst)):
+            row1 = np.array([pixel_idx_src[0], pixel_idx_src[1], 1,
+                            0, 0, 0,
+                            -pixel_idx_dst[0]*pixel_idx_src[0], -pixel_idx_dst[0]*pixel_idx_src[1], -pixel_idx_dst[0]])
+            A_list.append(row1)
+            row2 = np.array([0, 0, 0,
+                            pixel_idx_src[0], pixel_idx_src[1], 1,
+                            -pixel_idx_dst[1]*pixel_idx_src[0], -pixel_idx_dst[1]*pixel_idx_src[1], -pixel_idx_dst[1]])
+            A_list.append(row2)
+        A = np.array(A_list)
+
+        ATA = np.dot(np.transpose(A), A)
+        eig_val, eig_vec = np.linalg.eig(ATA)
+        min_eig_idx = np.argmin(eig_val)
+        min_eig_vec = eig_vec[min_eig_idx]
+        transform_matrix = min_eig_vec.reshape(3, 3)
+        return transform_matrix
 
     @staticmethod
     def compute_forward_homography_slow(
