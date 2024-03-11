@@ -45,10 +45,10 @@ class Solution:
             A_list.append(row2)
         A = np.array(A_list)
 
-        ATA = np.dot(np.transpose(A), A)
+        ATA = np.matmul(np.transpose(A), A)
         eig_val, eig_vec = np.linalg.eig(ATA)
         min_eig_idx = np.argmin(eig_val)
-        min_eig_vec = eig_vec[min_eig_idx]
+        min_eig_vec = eig_vec[:, min_eig_idx]
         transform_matrix = min_eig_vec.reshape(3, 3)
         return transform_matrix
 
