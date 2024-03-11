@@ -77,7 +77,17 @@ class Solution:
         """
         # return new_image
         """INSERT YOUR CODE HERE"""
-        pass
+        src_in_dst = np.zeros(shape=dst_image_shape, dtype=int)
+        y_len, x_len = src_image.shape[0:2]
+        for x in range(x_len):
+            for y in range(y_len):
+                src_vec = np.array([x, y, 1])
+                dst_vec = np.matmul(homography, src_vec)
+                dst_vec /= dst_vec[-1]
+                dst_vec_round = np.round(np.array(dst_vec[0:2])).astype(int)
+                if 0 <= dst_vec_round[0] <= dst_image_shape[1] and 0 <= dst_vec_round[1] <= dst_image_shape[0]:
+                    src_in_dst[dst_vec_round[1], dst_vec_round[0], :] = src_image[y, x, :]
+        return src_in_dst
 
     @staticmethod
     def compute_forward_homography_fast(
@@ -108,7 +118,38 @@ class Solution:
         """
         # return new_image
         """INSERT YOUR CODE HERE"""
-        pass
+
+        # use meshgrid:
+        y_len, x_len = src_image.shape[0:2]
+        src_img_pixels = np.meshgrid(range(y_len), range(x_len))
+
+        # generate matrix of size 3x(H*W):
+        ones_layer = np.ones((1, y_len * x_len))
+        index_array = np.concatenate((
+            src_img_pixels[1].reshape(1, -1),
+            src_img_pixels[0].reshape(1, -1),
+            ones_layer
+        ), axis=0)
+
+        # apply homography transformation + normalization
+        src_in_dst_idx = np.matmul(homography, index_array)
+        src_in_dst_idx_y = np.divide(src_in_dst_idx[1], src_in_dst_idx[2])
+        src_in_dst_idx_x = np.divide(src_in_dst_idx[0], src_in_dst_idx[2])
+        src_in_dst_idx_y = np.round(np.array(src_in_dst_idx_y)).astype(int)
+        src_in_dst_idx_x = np.round(np.array(src_in_dst_idx_x)).astype(int)
+
+        # find valid-index in src image
+        valid_idx = (0 <= src_in_dst_idx_x) & \
+                    (src_in_dst_idx_x <= dst_image_shape[1]) & \
+                    (0 <= src_in_dst_idx_y) & \
+                    (src_in_dst_idx_y <= dst_image_shape[0])
+
+        # prepare output image and plant the valid pixels
+        src_in_dst = np.zeros(shape=dst_image_shape, dtype=int)
+        src_in_dst[src_in_dst_idx_y[valid_idx], src_in_dst_idx_x[valid_idx], :] = src_image[
+            src_img_pixels[0].reshape(1, -1).squeeze()[valid_idx],
+            src_img_pixels[1].reshape(1, -1).squeeze()[valid_idx]]
+        return src_in_dst
 
     @staticmethod
     def test_homography(homography: np.ndarray,
