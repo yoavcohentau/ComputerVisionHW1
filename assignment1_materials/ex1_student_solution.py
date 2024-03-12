@@ -178,7 +178,35 @@ class Solution:
         """
         # return fit_percent, dist_mse
         """INSERT YOUR CODE HERE"""
-        pass
+        # generate matrix of size 3xlen(match_p):
+        ones_layer = np.ones((1, len(match_p_src[0])))
+        index_array = np.concatenate((
+            match_p_src[0].reshape(1, -1),
+            match_p_src[1].reshape(1, -1),
+            ones_layer
+        ), axis=0)
+
+        # apply homography transformation + normalization
+        src_in_dst_idx = np.matmul(homography, index_array)
+        src_in_dst_idx_y = np.divide(src_in_dst_idx[1], src_in_dst_idx[2])
+        src_in_dst_idx_x = np.divide(src_in_dst_idx[0], src_in_dst_idx[2])
+        src_in_dst_idx_y = np.round(np.array(src_in_dst_idx_y)).astype(int)
+        src_in_dst_idx_x = np.round(np.array(src_in_dst_idx_x)).astype(int)
+
+        # find distances
+        distances = np.sqrt((match_p_dst[0]-src_in_dst_idx_x)**2 + (match_p_dst[1]-src_in_dst_idx_y)**2)
+
+        # find fit_precent
+        inlier_idx = np.where(distances < max_err)[0]
+        fit_precent = len(inlier_idx) / len(distances)
+
+        # find dist_mse
+        if len(inlier_idx) == 0:
+            dist_mse = 10 ** 9
+        else:
+            dist_mse = np.mean(distances[inlier_idx]**2)
+
+        return fit_precent, dist_mse
 
     @staticmethod
     def meet_the_model_points(homography: np.ndarray,
