@@ -140,9 +140,9 @@ class Solution:
 
         # find valid-index in src image
         valid_idx = (0 <= src_in_dst_idx_x) & \
-                    (src_in_dst_idx_x <= dst_image_shape[1]) & \
+                    (src_in_dst_idx_x < dst_image_shape[1]) & \
                     (0 <= src_in_dst_idx_y) & \
-                    (src_in_dst_idx_y <= dst_image_shape[0])
+                    (src_in_dst_idx_y < dst_image_shape[0])
 
         # prepare output image and plant the valid pixels
         src_in_dst = np.zeros(shape=dst_image_shape, dtype=int)
