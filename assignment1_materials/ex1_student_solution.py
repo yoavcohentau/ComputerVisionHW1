@@ -36,12 +36,12 @@ class Solution:
         A_list = []  # np.array([]).reshape(1, -1)
         for pixel_idx_src, pixel_idx_dst in zip(np.transpose(match_p_src), np.transpose(match_p_dst)):
             row1 = np.array([pixel_idx_src[0], pixel_idx_src[1], 1,
-                            0, 0, 0,
-                            -pixel_idx_dst[0]*pixel_idx_src[0], -pixel_idx_dst[0]*pixel_idx_src[1], -pixel_idx_dst[0]])
+                             0, 0, 0,
+                             -pixel_idx_dst[0]*pixel_idx_src[0], -pixel_idx_dst[0]*pixel_idx_src[1], -pixel_idx_dst[0]])
             A_list.append(row1)
             row2 = np.array([0, 0, 0,
-                            pixel_idx_src[0], pixel_idx_src[1], 1,
-                            -pixel_idx_dst[1]*pixel_idx_src[0], -pixel_idx_dst[1]*pixel_idx_src[1], -pixel_idx_dst[1]])
+                             pixel_idx_src[0], pixel_idx_src[1], 1,
+                             -pixel_idx_dst[1]*pixel_idx_src[0], -pixel_idx_dst[1]*pixel_idx_src[1], -pixel_idx_dst[1]])
             A_list.append(row2)
         A = np.array(A_list)
 
@@ -235,7 +235,30 @@ class Solution:
         """
         # return mp_src_meets_model, mp_dst_meets_model
         """INSERT YOUR CODE HERE"""
-        pass
+        # generate matrix of size 3xlen(match_p):
+        ones_layer = np.ones((1, len(match_p_src[0])))
+        index_array = np.concatenate((
+            match_p_src[0].reshape(1, -1),
+            match_p_src[1].reshape(1, -1),
+            ones_layer
+        ), axis=0)
+
+        # apply homography transformation + normalization
+        src_in_dst_idx = np.matmul(homography, index_array)
+        src_in_dst_idx_y = np.divide(src_in_dst_idx[1], src_in_dst_idx[2])
+        src_in_dst_idx_x = np.divide(src_in_dst_idx[0], src_in_dst_idx[2])
+        src_in_dst_idx_y = np.round(np.array(src_in_dst_idx_y)).astype(int)
+        src_in_dst_idx_x = np.round(np.array(src_in_dst_idx_x)).astype(int)
+
+        # find distances
+        distances = np.sqrt((match_p_dst[0]-src_in_dst_idx_x)**2 + (match_p_dst[1]-src_in_dst_idx_y)**2)
+
+        # find inlier points
+        inlier_idx = np.where(distances < max_err)[0]
+        mp_src_meets_model = match_p_src[:, inlier_idx]
+        mp_dst_meets_model = match_p_dst[:, inlier_idx]
+
+        return mp_src_meets_model, mp_dst_meets_model
 
     def compute_homography(self,
                            match_p_src: np.ndarray,
@@ -269,7 +292,35 @@ class Solution:
         # k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
         # return homography
         """INSERT YOUR CODE HERE"""
-        pass
+        # use class notations:
+        w = inliers_percent
+        # threshold
+        t = max_err
+        # p = parameter determining the probability of the algorithm to succeed
+        p = 0.99
+        # the minimal probability of points which meets with the model
+        d = 0.5
+        # number of points sufficient to compute the model
+        n = 4
+        # number of RANSAC iterations (+1 to avoid the case where w=1)
+        k = int(np.ceil(np.log(1 - p) / np.log(1 - w ** n))) + 1
+
+        points_idx_vec = range(0, match_p_src.shape[1])
+        best_homography = None
+        best_fit_prob = d
+        for iter in range(k):
+            # points randomizing
+            rand_points_idx = sample(points_idx_vec, 4)
+            rand_points_src = match_p_src[:, rand_points_idx]
+            rand_points_dst = match_p_dst[:, rand_points_idx]
+            # compute homography
+            homography = self.compute_homography_naive(rand_points_src, rand_points_dst)
+            # find prob of points that meets the model
+            fit_percent, _ = self.test_homography(homography, match_p_src, match_p_dst, t)
+            if fit_percent >= best_fit_prob:
+                best_homography = homography
+                best_fit_prob = fit_percent
+        return best_homography
 
     @staticmethod
     def compute_backward_mapping(
