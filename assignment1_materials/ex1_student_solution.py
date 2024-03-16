@@ -307,7 +307,7 @@ class Solution:
 
         points_idx_vec = range(0, match_p_src.shape[1])
         best_homography = None
-        best_fit_prob = d
+        best_fit_prob = 0  # should be d, but for continuous running - in any case return the best homography that was founded
         for iter in range(k):
             # points randomizing
             rand_points_idx = sample(points_idx_vec, 4)
@@ -494,7 +494,12 @@ class Solution:
         """
         # return final_homography
         """INSERT YOUR CODE HERE"""
-        pass
+        translation_matrix = np.array([[1, 0, -pad_left],
+                                       [0, 1, -pad_up],
+                                       [0, 0, 1]])
+        final_homography = np.matmul(backward_homography, translation_matrix)
+        final_homography /= np.linalg.norm(final_homography)
+        return final_homography
 
     def panorama(self,
                  src_image: np.ndarray,
@@ -537,4 +542,41 @@ class Solution:
         """
         # return np.clip(img_panorama, 0, 255).astype(np.uint8)
         """INSERT YOUR CODE HERE"""
-        pass
+
+        # (1) Compute the forward homography and the panorama shape
+        homography = self.compute_homography(match_p_src, match_p_dst, inliers_percent, max_err)
+        panorama_rows_num, panorama_cols_num, pad_struct = self.find_panorama_shape(src_image, dst_image, homography)
+        panorama_shape = (panorama_rows_num, panorama_cols_num, 3)
+
+        # (2) Compute the backward homography.
+        backward_homography = np.linalg.inv(homography)
+
+        # (3) Add the appropriate translation to the homography so that the source image will plant in place
+        translated_backward_homography = self.add_translation_to_backward_homography(backward_homography, pad_struct.pad_left, pad_struct.pad_up)
+
+        # (4) Compute the backward warping with the appropriate translation
+        backward_warp = self.compute_backward_mapping(translated_backward_homography, src_image, panorama_shape)
+
+        # (5) Create the empty panorama image and plant there the destination image
+        panorama = np.zeros(panorama_shape, dtype=int)
+        panorama[pad_struct.pad_up:pad_struct.pad_up+dst_image.shape[0], pad_struct.pad_left:pad_struct.pad_left+dst_image.shape[1], :] = dst_image
+
+        # (6) place the backward warped image in the indices where the panorama image is zero
+        mask_temp = np.full(panorama_shape[0:2], True, dtype=bool)
+        mask_temp[pad_struct.pad_up:pad_struct.pad_up+dst_image.shape[0], pad_struct.pad_left:pad_struct.pad_left+dst_image.shape[1]] = False
+        mask_3d = np.repeat(mask_temp[np.newaxis, :, :], 3, axis=0)
+        mask_3d = np.transpose(mask_3d, (1, 2, 0))
+        panorama[mask_3d] = backward_warp[mask_3d]
+
+        # (7) Don't forget to clip the values of the image to [0, 255].
+        panorama = np.clip(panorama, 0, 255).astype(np.uint8)
+
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # plt.imshow(panorama)
+        # plt.title('Panorama Image')
+        # plt.show()
+
+        return panorama
+
+
