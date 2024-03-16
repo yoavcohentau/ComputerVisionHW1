@@ -350,7 +350,59 @@ class Solution:
 
         # return backward_warp
         """INSERT YOUR CODE HERE"""
-        pass
+
+        # use meshgrid:
+        y_len, x_len = dst_image_shape[0:2]
+        dst_img_pixels = np.meshgrid(range(x_len), range(y_len))
+
+        # generate matrix of size 3x(H*W):
+        ones_layer = np.ones((1, y_len * x_len))
+        index_array = np.concatenate((
+            dst_img_pixels[0].reshape(1, -1),
+            dst_img_pixels[1].reshape(1, -1),
+            ones_layer
+        ), axis=0)
+
+        # apply backward homography transformation + normalization
+        dst_in_src_idx = np.matmul(backward_projective_homography, index_array)
+        dst_in_src_idx_y = np.divide(dst_in_src_idx[1], dst_in_src_idx[2])
+        dst_in_src_idx_x = np.divide(dst_in_src_idx[0], dst_in_src_idx[2])
+        # find valid-index in src image
+        valid_idx = (0 <= np.round(dst_in_src_idx_x)) & \
+                    (np.round(dst_in_src_idx_x) < src_image.shape[1]) & \
+                    (0 <= np.round(dst_in_src_idx_y)) & \
+                    (np.round(dst_in_src_idx_y) < src_image.shape[0])
+        dst_in_src_points = np.concatenate((dst_in_src_idx_y[valid_idx].reshape(1, -1), dst_in_src_idx_x[valid_idx].reshape(1, -1)), axis=0).T
+
+        # use meshgrid for src image:
+        y_len, x_len = src_image.shape[0:2]
+        src_img_pixels = np.meshgrid(range(x_len), range(y_len))
+
+        # bi-linear interpolation
+        src_img_y_pixels_flat = src_img_pixels[1].reshape(1, -1).squeeze()
+        src_img_x_pixels_flat = src_img_pixels[0].reshape(1, -1).squeeze()
+        src_img_points = np.concatenate((src_img_y_pixels_flat.reshape(1, -1), src_img_x_pixels_flat.reshape(1, -1)), axis=0).T
+        r_src_image_flat = src_image[:, :, 0].reshape(1, -1).squeeze()
+        g_src_image_flat = src_image[:, :, 1].reshape(1, -1).squeeze()
+        b_src_image_flat = src_image[:, :, 2].reshape(1, -1).squeeze()
+
+        r = griddata(src_img_points, r_src_image_flat, dst_in_src_points, fill_value=0, method='cubic')
+        g = griddata(src_img_points, g_src_image_flat, dst_in_src_points, fill_value=0, method='cubic')
+        b = griddata(src_img_points, b_src_image_flat, dst_in_src_points, fill_value=0, method='cubic')
+
+        dst_image = np.zeros(dst_image_shape, dtype=int)
+        dst_image[dst_img_pixels[1].reshape(1, -1).squeeze()[valid_idx], dst_img_pixels[0].reshape(1, -1).squeeze()[valid_idx], 0] = np.array(np.round(r), dtype=int)
+        dst_image[dst_img_pixels[1].reshape(1, -1).squeeze()[valid_idx], dst_img_pixels[0].reshape(1, -1).squeeze()[valid_idx], 1] = np.array(np.round(g), dtype=int)
+        dst_image[dst_img_pixels[1].reshape(1, -1).squeeze()[valid_idx], dst_img_pixels[0].reshape(1, -1).squeeze()[valid_idx], 2] = np.array(np.round(b), dtype=int)
+
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # plt.imshow(dst_image)
+        # plt.title('Backward Panorama imperfect matches - RANSAC Homography')
+        # plt.show()
+
+        backward_warp = np.clip(dst_image, 0, 255).astype(np.uint8)
+        return backward_warp
 
     @staticmethod
     def find_panorama_shape(src_image: np.ndarray,
